@@ -737,9 +737,11 @@ def render_animation(args, anim_args):
     start_frame = 0
     if anim_args.resume_from_timestring:
         for tmp in os.listdir(args.outdir):
-            if tmp.split("_")[0] == anim_args.resume_timestring:
-                start_frame += 1
-        start_frame = start_frame - 1
+            [timestring, rest] = tmp.split("_")
+            index = rest.split(".")[0]
+            index = int(index) if index.isdigit() else 0
+            if timestring == anim_args.resume_timestring and index > start_frame:
+                start_frame = index
 
     # create output folder for the batch
     os.makedirs(args.outdir, exist_ok=True)
