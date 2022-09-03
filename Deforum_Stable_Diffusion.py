@@ -737,9 +737,9 @@ def render_animation(args, anim_args):
     start_frame = 0
     if anim_args.resume_from_timestring:
         for tmp in os.listdir(args.outdir):
-            [timestring, rest] = tmp.split("_")
-            index = rest.split(".")[0]
-            index = int(index) if index.isdigit() else 0
+            parts = tmp.split("_")
+            timestring = parts[0]
+            index = int(parts[1]) if parts[1].isdigit() else 0
             if timestring == anim_args.resume_timestring and index > start_frame:
                 start_frame = index
 
