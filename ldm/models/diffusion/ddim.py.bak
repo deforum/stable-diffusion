@@ -225,8 +225,8 @@ class DDIMSampler(object):
                 extract_into_tensor(sqrt_one_minus_alphas_cumprod, t, x0.shape) * noise)
 
     @torch.no_grad()
-    def decode(self, x_latent, cond, t_start, transformation_fn, transformation_percent, unconditional_guidance_scale=1.0, unconditional_conditioning=None,
-               use_original_steps=False, img_callback=None):
+    def decode(self, x_latent, cond, t_start, unconditional_guidance_scale=1.0, unconditional_conditioning=None,
+               use_original_steps=False, img_callback=None, transformation_fn, transformation_percent):
 
         timesteps = np.arange(self.ddpm_num_timesteps) if use_original_steps else self.ddim_timesteps
         timesteps = timesteps[:t_start]
