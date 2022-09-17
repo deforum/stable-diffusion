@@ -119,9 +119,9 @@ class BERTEmbedder(AbstractEncoder):
         z = self.transformer(tokens, return_embeddings=True, embedding_manager=embedding_manager)
         return z
 
-    def encode(self, text, **kwargs):
+    def encode(self, text):
         # output of length 77
-        return self(text, **kwargs)
+        return self(text)
 
 class SpatialRescaler(nn.Module):
     def __init__(self,
@@ -313,16 +313,17 @@ class FrozenCLIPEmbedder(AbstractEncoder):
         for param in self.parameters():
             param.requires_grad = False
 
-    def forward(self, text, **kwargs):
+    def forward(self, text):
         batch_encoding = self.tokenizer(text, truncation=True, max_length=self.max_length, return_length=True,
                                         return_overflowing_tokens=False, padding="max_length", return_tensors="pt")
         tokens = batch_encoding["input_ids"].to(self.device)        
-        z = self.transformer(input_ids=tokens, **kwargs)
+        outputs = self.transformer(input_ids=tokens)
+        z = outputs.last_hidden_state
 
         return z
 
-    def encode(self, text, **kwargs):
-        return self(text, **kwargs)
+    def encode(self, text):
+        return self(text)
 
 
 class FrozenCLIPTextEmbedder(nn.Module):
