@@ -132,7 +132,7 @@ class EmbeddingManager(nn.Module):
         torch.save({"string_to_token": self.string_to_token_dict,
                     "string_to_param": self.string_to_param_dict}, ckpt_path)
 
-    def load(self, ckpt_path):
+    def load(self, ckpt_path, full=True):
         ckpt = torch.load(ckpt_path, map_location='cpu')
 
         # Handle .pt textual inversion files
@@ -149,7 +149,7 @@ class EmbeddingManager(nn.Module):
                 ckpt[token_str] = torch.nn.Parameter(ckpt[token_str])
 
             self.string_to_param_dict.update(ckpt)
-        if half_precision:
+        if not full:
             for key, value in self.string_to_param_dict.items():
                 self.string_to_param_dict[key] = torch.nn.Parameter(value.half())
 
