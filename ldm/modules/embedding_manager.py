@@ -216,7 +216,7 @@ class EmbeddingManager(nn.Module):
             ckpt_path,
         )
 
-    def load(self, ckpt_path, full=True):
+    def load(self, ckpt_path):
         ckpt = torch.load(ckpt_path, map_location='cpu')
         if isinstance(ckpt, nn.ParameterDict):
             self.string_to_token_dict = ckpt["string_to_token"]
@@ -232,7 +232,7 @@ class EmbeddingManager(nn.Module):
             nparam = nn.Parameter(data = newt, requires_grad=True)
         
             self.string_to_token_dict = {new_token: torch.tensor(265)}
-            self.string_to_param_dict = nn.ParameterDict({new_token: nparam})   `
+            self.string_to_param_dict = nn.ParameterDict({new_token: nparam})  
 
             print(f'Added terms: {", ".join(self.string_to_param_dict.keys())}')
 
