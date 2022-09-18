@@ -218,27 +218,23 @@ class EmbeddingManager(nn.Module):
 
     def load(self, ckpt_path, full=True):
         ckpt = torch.load(ckpt_path, map_location='cpu')
-
-        # Handle .pt textual inversion files
-        if 'string_to_token' in ckpt and 'string_to_param' in ckpt:
+        if isinstance(ckpt, nn.ParameterDict):
             self.string_to_token_dict = ckpt["string_to_token"]
             self.string_to_param_dict = ckpt["string_to_param"]
-
-        # Handle .bin textual inversion files from Huggingface Concepts
-        # https://huggingface.co/sd-concepts-library
         else:
-            for token_str in list(ckpt.keys()):
-                token = get_clip_token_for_string(self.embedder.tokenizer, token_str)
-                self.string_to_token_dict[token_str] = token
-                ckpt[token_str] = torch.nn.Parameter(ckpt[token_str])
-                
-            self.string_to_param_dict.update(ckpt)
+            file_token = list(ckpt.keys())[0]
+            new_token = '*'
 
-        if not full:
-            for key, value in self.string_to_param_dict.items():
-                self.string_to_param_dict[key] = torch.nn.Parameter(value.half())
+            tensor_size = ckpt[file_token].count_nonzero()
+            newt = ckpt[file_token].reshape(1, tensor_size)
+            newt = newt.half()
 
-        print(f'Added terms: {", ".join(self.string_to_param_dict.keys())}')
+            nparam = nn.Parameter(data = newt, requires_grad=True)
+        
+            self.string_to_token_dict = {new_token: torch.tensor(265)}
+            self.string_to_param_dict = nn.ParameterDict({new_token: nparam})   `
+
+            print(f'Added terms: {", ".join(self.string_to_param_dict.keys())}')
 
     def get_embedding_norms_squared(self):
         all_params = torch.cat(
