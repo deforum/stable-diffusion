@@ -218,23 +218,10 @@ class EmbeddingManager(nn.Module):
 
     def load(self, ckpt_path):
         ckpt = torch.load(ckpt_path, map_location='cpu')
-        if isinstance(ckpt, nn.ParameterDict):
-            self.string_to_token_dict = ckpt["string_to_token"]
-            self.string_to_param_dict = ckpt["string_to_param"]
-        else:
-            file_token = list(ckpt.keys())[0]
-            new_token = '*'
-
-            tensor_size = ckpt[file_token].count_nonzero()
-            newt = ckpt[file_token].reshape(1, tensor_size)
-            newt = newt.half()
-
-            nparam = nn.Parameter(data = newt, requires_grad=True)
         
-            self.string_to_token_dict = {new_token: torch.tensor(265)}
-            self.string_to_param_dict = nn.ParameterDict({new_token: nparam})  
-
-            print(f'Added terms: {", ".join(self.string_to_param_dict.keys())}')
+        self.string_to_token_dict = ckpt["string_to_token"]
+        self.string_to_param_dict = ckpt["string_to_param"]
+        
 
     def get_embedding_norms_squared(self):
         all_params = torch.cat(
