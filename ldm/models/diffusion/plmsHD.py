@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from functools import partial
+import sys 
 
 from ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters, make_ddim_timesteps, noise_like
 
@@ -136,10 +137,16 @@ class PLMSSampler(object):
         total_steps = timesteps if ddim_use_original_steps else timesteps.shape[0]
         print(f"Running PLMS Sampling with {total_steps} timesteps")
 
-        iterator = tqdm(time_range, desc='PLMS Sampler', total=total_steps)
+        iterator = tqdm(time_range, desc='PLMS Sampler', total=total_steps, disable=True)
+        #iterator = range(total_steps)
         old_eps = []
 
         for i, step in enumerate(iterator):
+            
+            sys.stdout.flush()
+            sys.stdout.write(f'Iteration {i+1}\n')
+            sys.stdout.flush()
+        
             index = total_steps - i - 1
             ts = torch.full((b,), step, device=device, dtype=torch.long)
             ts_next = torch.full((b,), time_range[min(i + 1, len(time_range) - 1)], device=device, dtype=torch.long)

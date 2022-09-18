@@ -58,6 +58,8 @@ class PLMSSampler(object):
                S,
                batch_size,
                shape,
+               transformation_fn,
+               transformation_percent,
                conditioning=None,
                callback=None,
                normals_sequence=None,

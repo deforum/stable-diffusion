@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from einops import rearrange
-
+import cuda
 from ldm.util import instantiate_from_config
 from ldm.modules.attention import LinearAttention
 
@@ -213,7 +213,7 @@ class AttnBlock(nn.Module):
         stats = torch.cuda.memory_stats(q.device)
         mem_active = stats['active_bytes.all.current']
         mem_reserved = stats['reserved_bytes.all.current']
-        mem_free_cuda, _ = torch.cuda.mem_get_info(torch.cuda.current_device())
+        mem_free_cuda, _ = cuda.mem_get_info(torch.cuda.current_device())
         mem_free_torch = mem_reserved - mem_active
         mem_free_total = mem_free_cuda + mem_free_torch
 

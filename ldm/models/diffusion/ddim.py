@@ -1,8 +1,7 @@
 """SAMPLING ONLY."""
-
+import sys
 import torch
 import numpy as np
-#from tqdm.notebook import tqdm
 from tqdm import tqdm
 from functools import partial
 
@@ -120,8 +119,9 @@ class DDIMSampler(object):
                       unconditional_guidance_scale=1., unconditional_conditioning=None,):
         device = self.model.betas.device
         b = shape[0]
+        
         if x_T is None:
-            img = torch.randn(shape, device=device)
+                img = torch.randn(shape, device=device) #original line actually
         else:
             img = x_T
 
@@ -139,6 +139,10 @@ class DDIMSampler(object):
         iterator = tqdm(time_range, desc='DDIM Sampler', total=total_steps)
 
         for i, step in enumerate(iterator):
+        
+            sys.stdout.write(f'Iteration {i}\n')
+            sys.stdout.flush()
+        
             index = total_steps - i - 1
             ts = torch.full((b,), step, device=device, dtype=torch.long)
 
@@ -155,7 +159,7 @@ class DDIMSampler(object):
                                       unconditional_conditioning=unconditional_conditioning)
             img, pred_x0 = outs
             if callback: callback(i)
-            if img_callback: img_callback(img, i)
+            if img_callback: img_callback(pred_x0, i)
 
             if index % log_every_t == 0 or index == total_steps - 1:
                 intermediates['x_inter'].append(img)
@@ -221,7 +225,7 @@ class DDIMSampler(object):
                 extract_into_tensor(sqrt_one_minus_alphas_cumprod, t, x0.shape) * noise)
 
     @torch.no_grad()
-    def decode(self, x_latent, cond, t_start, unconditional_guidance_scale=1.0, unconditional_conditioning=None,
+    def decode(self, x_latent, cond, t_start, transformation_fn, transformation_percent, unconditional_guidance_scale=1.0, unconditional_conditioning=None,
                use_original_steps=False, img_callback=None):
 
         timesteps = np.arange(self.ddpm_num_timesteps) if use_original_steps else self.ddim_timesteps

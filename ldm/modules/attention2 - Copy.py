@@ -1,6 +1,4 @@
 import math
-import sys
-
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
@@ -152,7 +150,7 @@ class SpatialSelfAttention(nn.Module):
 
 
 class CrossAttention(nn.Module):
-    def __init__(self, query_dim, superfastmode=True, context_dim=None, heads=8, dim_head=64, dropout=0.):
+    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.):
         super().__init__()
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
@@ -163,16 +161,15 @@ class CrossAttention(nn.Module):
         self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
         self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
         self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
-        self.superfastmode = superfastmode
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, query_dim),
             nn.Dropout(dropout)
         )
-        self.forward = self.fast_forward if superfastmode else self.slow_forward
 
-    def fast_forward(self, x, context=None, mask=None):
+    def forward(self, x, context=None, mask=None):
         h = self.heads
+
         q = self.to_q(x)
         context = default(context, x)
         k = self.to_k(context)
@@ -181,63 +178,57 @@ class CrossAttention(nn.Module):
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
-        sim = einsum('b i d, b j d -> b i j', q, k)  # (8, 4096, 40)
-        sim *= self.scale
-        del q, k
-
-        if exists(mask):
-            mask = rearrange(mask, 'b ... -> b (...)')
-            max_neg_value = -torch.finfo(sim.dtype).max
-            mask = repeat(mask, 'b j -> (b h) () j', h=h)
-            sim.masked_fill_(~mask, max_neg_value)
-            del mask
-
-        sim[sim.shape[0] // 2:] = sim[sim.shape[0] // 2:].softmax(dim=-1)
-        sim[:sim.shape[0] // 2] = sim[:sim.shape[0] // 2].softmax(dim=-1)
-
-        sim = einsum('b i j, b j d -> b i d', sim, v)
-        sim = rearrange(sim, '(b h) n d -> b n (h d)', h=h)
-        del h, v
-
-        return self.to_out(sim)
-
-    def slow_forward(self, x, context=None, mask=None):
-        h = self.heads
-        device = x.device
-        q = self.to_q(x)
-        context = default(context, x)
-        k = self.to_k(context)
-        v = self.to_v(context)
-        del context, x
-
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
-
+        # try:
+        #     sim = einsum('b i d, b j d -> b i j', q, k)  # (8, 4096, 40)
+        #     sim *= self.scale
+        #     q, k = q.cpu(), k.cpu()
+        #
+        #     if exists(mask):
+        #         mask = rearrange(mask, 'b ... -> b (...)')
+        #         max_neg_value = -torch.finfo(sim.dtype).max
+        #         mask = repeat(mask, 'b j -> (b h) () j', h=h)
+        #         sim.masked_fill_(~mask, max_neg_value)
+        #         del mask
+        #
+        #         # attention, what we cannot get enough of, by halves
+        #
+        #     sim[4:] = sim[4:].softmax(dim=-1)
+        #
+        #     sim[:4] = sim[:4].softmax(dim=-1)
+        #
+        #     sim = einsum('b i j, b j d -> b i d', sim, v)
+        #     sim = rearrange(sim, '(b h) n d -> b n (h d)', h=h)
+        #     return self.to_out(sim)
+        # except RuntimeError:
+        #     if "sim" in vars():
+        #         del sim
+        #     torch.cuda.empty_cache()
         r1 = torch.zeros(q.shape[0], q.shape[1], v.shape[2])
         for i in range(0, q.shape[0], 2):
-            q, k, v = q.to(device), k.to(device), v.cpu()
+            q, k = q.cuda(), k.cuda()
             s1 = einsum('b i d, b j d -> b i j', q[i:i + 2], k[i:i + 2])
-            q, k, v = q.cpu(), k.cpu(), v.to(device)
+            q, k = q.cpu(), k.cpu()
             s1 *= self.scale
 
-            s1 = torch.stack([F.softmax(x, dim=-1).cpu() for x in s1])
+            s1[1:] = s1[1:].softmax(dim=-1)
+            s1[:1] = s1[:1].softmax(dim=-1)
 
-            r1[i:i + 2] = einsum('b i j, b j d -> b i d', s1.to(device), v[i:i + 2]).cpu()
+            r1[i:i + 2] = einsum('b i j, b j d -> b i d', s1, v[i:i + 2]).cpu()
         del s1
-        r2 = rearrange(r1.to(device), '(b h) n d -> b n (h d)', h=h).to(device)
+        r2 = rearrange(r1.to(q.device), '(b h) n d -> b n (h d)', h=h).cuda()
         del r1, q, k, v
 
         return self.to_out(r2)
 
 
 class BasicTransformerBlock(nn.Module):
-    def __init__(self, dim, n_heads, d_head, dropout=0., superfastmode=True, context_dim=None, gated_ff=True,
-                 checkpoint=True):
+    def __init__(self, dim, n_heads, d_head, dropout=0., context_dim=None, gated_ff=True, checkpoint=True):
         super().__init__()
         self.attn1 = CrossAttention(query_dim=dim, heads=n_heads, dim_head=d_head,
-                                    dropout=dropout, superfastmode=superfastmode)  # is a self-attention
+                                    dropout=dropout)  # is a self-attention
         self.ff = FeedForward(dim, dropout=dropout, glu=gated_ff)
         self.attn2 = CrossAttention(query_dim=dim, context_dim=context_dim,
-                                    heads=n_heads, dim_head=d_head, dropout=dropout, superfastmode=superfastmode)
+                                    heads=n_heads, dim_head=d_head, dropout=dropout)  # is self-attn if context is none
         self.norm1 = nn.LayerNorm(dim)
         self.norm2 = nn.LayerNorm(dim)
         self.norm3 = nn.LayerNorm(dim)
@@ -263,7 +254,7 @@ class SpatialTransformer(nn.Module):
     """
 
     def __init__(self, in_channels, n_heads, d_head,
-                 depth=1, dropout=0., superfastmode=True, context_dim=None):
+                 depth=1, dropout=0., context_dim=None):
         super().__init__()
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
@@ -276,9 +267,8 @@ class SpatialTransformer(nn.Module):
                                  padding=0)
 
         self.transformer_blocks = nn.ModuleList(
-            [BasicTransformerBlock(inner_dim, n_heads, d_head, superfastmode=superfastmode, dropout=dropout,
-                                   context_dim=context_dim)
-             for _ in range(depth)]
+            [BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim)
+             for d in range(depth)]
         )
         self.proj_out = zero_module(nn.Conv2d(inner_dim,
                                               in_channels,
