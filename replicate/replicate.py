@@ -76,7 +76,7 @@ class Predictor(BasePredictor):
     def predict(
         self,
         max_frames: int = Input(
-            description="Number of frames for animation", ge=100, le=1000, default=30
+            description="Number of frames for animation", ge=30, le=1000, default=30
         ),
         animation_prompts: str = Input(
             default="0: a beautiful portrait of a woman by Artgerm, trending on Artstation",
